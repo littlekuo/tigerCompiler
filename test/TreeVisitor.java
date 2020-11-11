@@ -56,7 +56,11 @@ class Tree{
     boolean has_right ;
     Tree my_null ;
 
-
+/*
+ * 1212
+ */
+    
+/* */ 11 
 
     //Tree new_node ;
     //Tree current_node ;

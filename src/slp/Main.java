@@ -15,6 +15,35 @@ import util.Bug;
 import util.Todo;
 import control.Control;
 
+
+
+
+//for Interpreter, refer to tiger book
+class Table{
+	String id; int value; Table tail;
+	
+	Table(String i, int v, Table t) {
+		id=i; value=v; tail=t;
+	}
+	
+	
+	int lookup(String key) {
+		if(key == id) {
+			return value;
+		}
+		return tail.lookup(key);
+	}
+}
+
+class IntAndTable {
+	int i; Table t;
+	
+	IntAndTable(int ii, Table tt) { 
+		i=ii; t=tt;
+	}
+}
+
+
 public class Main
 {
   // ///////////////////////////////////////////
@@ -22,9 +51,26 @@ public class Main
 
   private int maxArgsExp(Exp.T exp)
   {
-    new Todo();
+    if(exp instanceof Exp.Id) {
+    	return 0;
+    }else if(exp instanceof Exp.Num) {
+    	return 0;
+    }else if(exp instanceof Exp.Eseq) {
+    	Exp.Eseq ex = (Exp.Eseq) exp;
+    	int n1 = maxArgsStm(ex.stm);
+    	int n2 = maxArgsExp(ex.exp);
+    	return n1 >= n2 ? n1 : n2;
+    }else if(exp instanceof Exp.Op) {
+    	Exp.Op ex = (Exp.Op) exp;
+    	int n1 = maxArgsExp(ex.left);
+    	int n2 = maxArgsExp(ex.right);
+    	return n1 >= n2 ? n1 : n2;
+    }
+
     return -1;
   }
+
+
 
   private int maxArgsStm(Stm.T stm)
   {
@@ -34,12 +80,25 @@ public class Main
       int n2 = maxArgsStm(s.s2);
 
       return n1 >= n2 ? n1 : n2;
+      
     } else if (stm instanceof Stm.Assign) {
-      new Todo();
-      return -1;
+      Stm.Assign s = (Stm.Assign) stm;
+      
+      return maxArgsExp(s.exp);
+      
     } else if (stm instanceof Stm.Print) {
-      new Todo();
-      return -1;
+    	
+    	Stm.Print s = (Stm.Print) stm;
+    	ExpList.T exList = s.explist;
+    	int sum = 0;
+    	while(!(exList instanceof ExpList.Last)){
+    		++sum;
+    		ExpList.Pair list = (ExpList.Pair) exList;
+    		exList = list.list;
+    	}
+    	++sum;
+    	return sum;
+    
     } else
       new Bug();
     return 0;
@@ -48,23 +107,109 @@ public class Main
   // ////////////////////////////////////////
   // interpreter
 
-  private void interpExp(Exp.T exp)
+  Table table;
+
+  private IntAndTable interpExp(Exp.T exp, Table t)
   {
-    new Todo();
+    if(exp instanceof Exp.Id) {
+        
+    	Exp.Id ex = (Exp.Id) exp;
+    	IntAndTable res = new IntAndTable(t.lookup(ex.id), t);
+    	return res;
+ 
+    }else if(exp instanceof Exp.Num) {
+    	
+    	Exp.Num ex = (Exp.Num) exp;  
+    	IntAndTable res = new IntAndTable(ex.num, t);
+    	return res;
+    	
+    }
+    else if(exp instanceof Exp.Op) {
+
+    	Exp.Op ex = (Exp.Op) exp;
+    	IntAndTable l = interpExp(ex.left, t);
+    	IntAndTable r = interpExp(ex.right, l.t);
+    	int v = 0;
+  
+    	switch(ex.op) {
+    	 case ADD:
+    		 v = l.i + r.i;
+    		 break;
+    	 case SUB:
+    		 v = l.i - r.i;
+    		 break;
+    	 case TIMES:
+    		 v = l.i * r.i;
+    		 break;
+    	 case DIVIDE:
+    		 v = l.i / r.i;
+    		 break;
+      }
+    	IntAndTable res = new IntAndTable(v, r.t);
+    	return res;
+    		
+    }else {
+
+    	Exp.Eseq ex = (Exp.Eseq) exp;
+    	Table l = interpStm(ex.stm, t);
+    	IntAndTable r = interpExp(ex.exp, l);
+      return r;
+      
+    }
   }
 
-  private void interpStm(Stm.T prog)
+
+  private Table interpStm(Stm.T prog, Table t)
   {
+	  
     if (prog instanceof Stm.Compound) {
-      new Todo();
+      
+      Table l = interpStm(((Stm.Compound) prog).s1, t);
+      Table r = interpStm(((Stm.Compound) prog).s2, l);
+      return r;
+      
     } else if (prog instanceof Stm.Assign) {
-      new Todo();
-    } else if (prog instanceof Stm.Print) {
-      new Todo();
-    } else
-      new Bug();
-  }
+      
+      Stm.Assign pr = (Stm.Assign) prog;
+      IntAndTable r =  interpExp(pr.exp, t);
+      //update
+      Table res = new Table(pr.id, r.i, r.t);
+     
+      return res;
+    	
+    } else {
+      
+    	Stm.Print pr = (Stm.Print) prog;
+    	
+      ExpList.T exList = pr.explist;
+      int cnt = 0;
+    	IntAndTable l ;
+    	
+    	while(exList instanceof ExpList.Pair) {
+        
+        ++cnt;
+        l = interpExp(((ExpList.Pair) exList).exp, t);
+        if(cnt > 1) {
+        			System.out.print(" ");
+        }
+        System.out.print(l.i);
+        t = l.t;
+        exList = ((ExpList.Pair) exList).list;
 
+    	}
+    	
+    	++cnt;
+      l = interpExp(((ExpList.Last) exList).exp, t);
+      if(cnt > 1) {
+      System.out.print(" ");
+     	}
+      System.out.print(l.i);
+    	System.out.print("\n");
+      return l.t;
+      
+    } 
+    
+  }
   // ////////////////////////////////////////
   // compile
   HashSet<String> ids;
@@ -206,7 +351,8 @@ public class Main
 
     // interpret a given program
     if (Control.ConSlp.action == Control.ConSlp.T.INTERP) {
-      interpStm(prog);
+      Table t = new Table(null, 0, null);
+      interpStm(prog,t);
     }
 
     // compile a given SLP program to x86
